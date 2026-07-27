@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bethesda-material-extractor"
+version = "1.0.0"
+description = "Bethesda Material Extractor (BME)"
+authors = [{ name = "Wes Sitzes" }]
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = []
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Programming Language :: Python :: 3",
+]
+
+[project.scripts]
+bme = "bme.cli:main"
+
+[tool.setuptools]
+license-files = ["LICENSE", "COPYRIGHT"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["bme*"]
