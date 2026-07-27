@@ -62,15 +62,25 @@ jobs:
         id: release
         shell: pwsh
         run: |
-          $shortSha = $env:GITHUB_SHA.Substring(0, 7)
-          "tag=bme-main-$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT" >> $env:GITHUB_OUTPUT
-          "title=BME build $env:GITHUB_RUN_NUMBER ($shortSha)" >> $env:GITHUB_OUTPUT
+          $versionLine = Select-String -LiteralPath "pyproject.toml" `
+            -Pattern '^version\s*=\s*"([^"]+)"\s*$'
+          if ($null -eq $versionLine) {
+            throw "Could not read the project version from pyproject.toml."
+          }
+
+          $version = $versionLine.Matches[0].Groups[1].Value
+          "tag=v$version" >> $env:GITHUB_OUTPUT
+          "title=BME v$version" >> $env:GITHUB_OUTPUT
 
       - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          if (gh release view "${{ steps.release.outputs.tag }}" 2>$null) {
+            throw "Release ${{ steps.release.outputs.tag }} already exists. Update the version in pyproject.toml before publishing another release."
+          }
+
           gh release create "${{ steps.release.outputs.tag }}" `
             "BME-Windows-x64.zip#BME for Windows x64" `
             "BME-Windows-x64.zip.sha256#SHA-256 checksum" `

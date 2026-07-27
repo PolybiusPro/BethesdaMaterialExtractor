@@ -109,7 +109,9 @@ after a successful build.
 Pushes to `main` that change `src`, `assets`, or `tests` automatically build
 and publish a Windows x64 GitHub Release. The release includes a ZIP containing
 `BME.exe`, `LICENSE`, and `COPYRIGHT`, plus a SHA-256 checksum file. The workflow
-can also be started manually from the repository's **Actions** page.
+uses the version in `pyproject.toml` for the release tag and title, so update
+the version before publishing a new release. The workflow can also be started
+manually from the repository's **Actions** page.
 
 ## Project layout
 
