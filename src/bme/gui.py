@@ -765,7 +765,7 @@ class App(tk.Tk):
         messagebox.showinfo(
             "About",
             "Bethesda Material Extractor (BME)\n"
-            "Python implementation v1.0.0\n\n"
+            "Python implementation v1.0.1\n\n"
             "Copyright © 2026 Wes Sitzes\n\n"
             "Discovers material references and exports material JSON.\n\n"
             "Licensed under GNU GPL v3.0 or later.",

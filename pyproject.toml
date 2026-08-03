@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bethesda-material-extractor"
-version = "1.0.0"
+version = "1.0.1"
 description = "Bethesda Material Extractor (BME)"
 authors = [{ name = "Wes Sitzes" }]
 license = { file = "LICENSE" }
