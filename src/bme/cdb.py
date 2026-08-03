@@ -241,16 +241,116 @@ class MaterialDatabase:
     def layered(cls, *databases: "MaterialDatabase") -> "MaterialDatabase":
         """Combine base and add-on databases in increasing priority order."""
         result = cls()
+        persistent_to_db: dict[ResourceId, int] = {}
+        used_ids: set[int] = set()
+        next_id = 1
+
+        def allocate_id(preferred: int) -> int:
+            nonlocal next_id
+            if preferred and preferred not in used_ids:
+                used_ids.add(preferred)
+                return preferred
+            while next_id in used_ids:
+                next_id += 1
+            allocated = next_id
+            used_ids.add(allocated)
+            next_id += 1
+            return allocated
+
+        def remap_references(value: Any, id_map: dict[int, int]) -> None:
+            if isinstance(value, dict):
+                if value.get("Type") in _REFERENCE_TYPES:
+                    data = value.get("Data")
+                    if isinstance(data, dict):
+                        raw_id = data.get("ID")
+                        if isinstance(raw_id, str) and raw_id:
+                            try:
+                                local_id = int(raw_id)
+                            except ValueError:
+                                pass
+                            else:
+                                global_id = id_map.get(local_id)
+                                if global_id is not None:
+                                    data["ID"] = str(global_id)
+                for child in value.values():
+                    remap_references(child, id_map)
+            elif isinstance(value, list):
+                for child in value:
+                    remap_references(child, id_map)
+
         for database in databases:
-            component_offset = len(result._component_json)
-            result._objects.update(database._objects)
-            result._resource_to_db.update(database._resource_to_db)
-            result._component_json.extend(database._component_json)
-            for object_id, components in database._component_map.items():
-                result._component_map[object_id].extend(
-                    (component, json_index + component_offset)
-                    for component, json_index in components
+            local_to_global: dict[int, int] = {}
+            for local_id, object_info in database._objects.items():
+                global_id = persistent_to_db.get(object_info.persistent)
+                if global_id is None:
+                    global_id = allocate_id(local_id)
+                    persistent_to_db[object_info.persistent] = global_id
+                local_to_global[local_id] = global_id
+
+            for local_id, object_info in database._objects.items():
+                global_id = local_to_global[local_id]
+                parent_id = 0
+                if object_info.parent:
+                    local_parent = database._objects.get(object_info.parent)
+                    if (
+                        local_parent is not None
+                        and local_parent.persistent
+                        == object_info.parent_persistent
+                    ):
+                        parent_id = local_to_global[object_info.parent]
+                    else:
+                        parent_id = persistent_to_db.get(
+                            object_info.parent_persistent, 0
+                        )
+                result._objects[global_id] = _Object(
+                    object_info.persistent,
+                    global_id,
+                    parent_id,
+                    object_info.parent_persistent,
+                    object_info.has_data,
                 )
+
+            component_offset = len(result._component_json)
+            changed_ids = {
+                local_id: global_id
+                for local_id, global_id in local_to_global.items()
+                if local_id != global_id
+            }
+            if changed_ids:
+                component_json = copy.deepcopy(database._component_json)
+                for value in component_json:
+                    remap_references(value, changed_ids)
+            else:
+                component_json = database._component_json
+            result._component_json.extend(component_json)
+
+            for resource, local_id in database._resource_to_db.items():
+                global_id = local_to_global.get(local_id)
+                if global_id is not None:
+                    result._resource_to_db[resource] = global_id
+
+            for local_id, components in database._component_map.items():
+                global_id = local_to_global.get(local_id)
+                if global_id is None:
+                    continue
+                if global_id == local_id:
+                    remapped = [
+                        (component, json_index + component_offset)
+                        for component, json_index in components
+                    ]
+                else:
+                    remapped = [
+                        (
+                            _Component(
+                                global_id,
+                                component.index,
+                                component.type_id,
+                            ),
+                            json_index + component_offset,
+                        )
+                        for component, json_index in components
+                    ]
+                result._component_map[global_id].extend(remapped)
         return result
 
     def _type_name(self, reference: int) -> str:

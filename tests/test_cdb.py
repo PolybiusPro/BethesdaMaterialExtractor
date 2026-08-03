@@ -226,34 +226,82 @@ class CdbTests(unittest.TestCase):
         material_path = r"Materials\Creation\Child.mat"
         parent_resource = resource_id(parent_path)
         material_resource = resource_id(material_path)
+        referenced_resource = ResourceId(3, 4, 5)
+        unrelated_resource = ResourceId(6, 7, 8)
         empty_resource = ResourceId(0, 0, 0)
 
         base = MaterialDatabase()
-        base._objects[1] = cdb._Object(
-            parent_resource, 1, 0, empty_resource, True
+        base._objects[10] = cdb._Object(
+            parent_resource, 10, 0, empty_resource, True
         )
-        base._resource_to_db[parent_resource] = 1
-        base._component_map[1].append((cdb._Component(1, 0, 0), 0))
+        base._objects[2] = cdb._Object(
+            unrelated_resource, 2, 0, empty_resource, True
+        )
+        base._resource_to_db[parent_resource] = 10
+        base._component_map[10].append((cdb._Component(10, 0, 0), 0))
         base._component_json.append(
             {"Type": "Example", "Data": {"BaseValue": "1"}}
         )
 
         creation = MaterialDatabase()
         creation._objects[2] = cdb._Object(
-            material_resource, 2, 1, parent_resource, True
+            material_resource, 2, 99, parent_resource, True
+        )
+        creation._objects[3] = cdb._Object(
+            referenced_resource, 3, 99, parent_resource, True
         )
         creation._resource_to_db[material_resource] = 2
         creation._component_map[2].append((cdb._Component(2, 0, 0), 0))
         creation._component_json.append(
-            {"Type": "Example", "Data": {"CreationValue": "2"}}
+            {
+                "Type": "Example",
+                "Data": {
+                    "CreationValue": "2",
+                    "Reference": {
+                        "Type": "BSMaterial::MaterialID",
+                        "Data": {"ID": "3"},
+                    },
+                },
+            }
+        )
+        creation._component_map[3].append((cdb._Component(3, 0, 0), 1))
+        creation._component_json.append(
+            {"Type": "Referenced", "Data": {"Value": "3"}}
         )
 
         layered = MaterialDatabase.layered(base, creation)
-        document = layered.export_document(material_path, {1: parent_path})
+        parent_id = layered.material_id(parent_path)
+        document = layered.export_document(
+            material_path, {parent_id: parent_path}
+        )
         self.assertEqual(document["Objects"][0]["Parent"], parent_path)
         self.assertEqual(
             document["Objects"][0]["Components"][0]["Data"],
-            {"BaseValue": "1", "CreationValue": "2"},
+            {
+                "BaseValue": "1",
+                "CreationValue": "2",
+                "Reference": {
+                    "Type": "BSMaterial::MaterialID",
+                    "Data": {"ID": str(referenced_resource)},
+                },
+            },
+        )
+        self.assertEqual(document["Objects"][1]["ID"], str(referenced_resource))
+        self.assertEqual(document["Objects"][1]["Parent"], parent_path)
+        self.assertEqual(
+            document["Objects"][1]["Components"],
+            [
+                {
+                    "Type": "Example",
+                    "Index": 0,
+                    "Data": {"BaseValue": "1"},
+                },
+                {
+                    "Type": "Referenced",
+                    "Index": 0,
+                    "Data": {"Value": "3"},
+                },
+            ],
         )
 
     def test_asset_ba2_uses_sibling_base_database(self) -> None:
