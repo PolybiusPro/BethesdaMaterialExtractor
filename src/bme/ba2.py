@@ -267,6 +267,10 @@ _BC_BLOCK_BYTES = {
     },
 }
 
+_UNCOMPRESSED_BYTES = {
+    28: 4,  # DXGI_FORMAT_R8G8B8A8_UNORM
+}
+
 
 class Ba2TextureArchive:
     """Reader and DDS exporter for Bethesda DX10 texture BA2 archives."""
@@ -421,17 +425,23 @@ class Ba2TextureArchive:
     @staticmethod
     def _dds_header(entry: Ba2TextureEntry) -> bytes:
         block_size = _BC_BLOCK_BYTES.get(entry.dxgi_format)
-        if block_size is None:
+        pixel_size = _UNCOMPRESSED_BYTES.get(entry.dxgi_format)
+        if block_size is None and pixel_size is None:
             raise FormatError(
                 f"Unsupported DXGI texture format {entry.dxgi_format} in {entry.name}"
             )
-        linear_size = (
-            max(1, (entry.width + 3) // 4)
-            * max(1, (entry.height + 3) // 4)
-            * block_size
-        )
+        if block_size is not None:
+            pitch_or_linear_size = (
+                max(1, (entry.width + 3) // 4)
+                * max(1, (entry.height + 3) // 4)
+                * block_size
+            )
+            flags = 0x000A1007
+        else:
+            assert pixel_size is not None
+            pitch_or_linear_size = entry.width * pixel_size
+            flags = 0x0002100F
         mip_count = max(1, entry.mip_count)
-        flags = 0x000A1007
         caps = 0x00001000
         if mip_count > 1:
             caps |= 0x00400008
@@ -441,7 +451,7 @@ class Ba2TextureArchive:
             flags,
             entry.height,
             entry.width,
-            linear_size,
+            pitch_or_linear_size,
             0,
             mip_count,
             *([0] * 11),

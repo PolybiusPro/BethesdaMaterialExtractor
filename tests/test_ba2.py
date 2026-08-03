@@ -32,7 +32,12 @@ def _make_ba2(path: Path, name: str, payload: bytes, *, compressed: bool) -> Non
 
 
 def _make_texture_ba2(
-    path: Path, name: str, payload: bytes, *, compressed: bool
+    path: Path,
+    name: str,
+    payload: bytes,
+    *,
+    compressed: bool,
+    dxgi_format: int = 80,
 ) -> None:
     encoded_name = name.encode("utf-8")
     stored = zlib.compress(payload) if compressed else payload
@@ -53,7 +58,7 @@ def _make_texture_ba2(
         4,
         4,
         1,
-        80,
+        dxgi_format,
         0x0800,
     )
     chunk = struct.pack(
@@ -132,6 +137,30 @@ class Ba2Tests(unittest.TestCase):
             data = destination.read_bytes()
             self.assertEqual(data[:4], b"DDS ")
             self.assertEqual(struct.unpack_from("<I", data, 128)[0], 80)
+            self.assertEqual(data[148:], payload)
+
+    def test_extract_uncompressed_dx10_texture_as_dds(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            archive_path = root / "Example - Textures.ba2"
+            payload = bytes(range(64))
+            _make_texture_ba2(
+                archive_path,
+                "textures/lut.dds",
+                payload,
+                compressed=True,
+                dxgi_format=28,
+            )
+
+            archive = Ba2TextureArchive.open(archive_path)
+            destination = archive.extract_all(root / "output")[0]
+            data = destination.read_bytes()
+
+            flags = struct.unpack_from("<I", data, 8)[0]
+            self.assertTrue(flags & 0x00000008)
+            self.assertFalse(flags & 0x00080000)
+            self.assertEqual(struct.unpack_from("<I", data, 20)[0], 16)
+            self.assertEqual(struct.unpack_from("<I", data, 128)[0], 28)
             self.assertEqual(data[148:], payload)
 
 
